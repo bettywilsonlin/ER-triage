@@ -177,15 +177,19 @@ function choiceButtons(options, onPick) {
     box.appendChild(b);
   });
 }
-function lockAnswers(pickedBtn) {
+function markPicked(pickedBtn) {
+  document.querySelectorAll("#answers button").forEach(b => b.classList.remove("picked"));
+  if (pickedBtn) pickedBtn.classList.add("picked");
+}
+function lockAnswers(pickedBtn) {           // 時間到／揭曉時鎖定
   answered = true;
   document.querySelectorAll("#answers button").forEach(b => b.disabled = true);
   if (pickedBtn) { pickedBtn.disabled = false; pickedBtn.classList.add("picked"); }
 }
 function sendAns(v, btn) {
   if (answered) return;
-  ws.send(JSON.stringify({ t: "ans", v }));
-  lockAnswers(btn);
+  ws.send(JSON.stringify({ t: "ans", v }));   // 時間內可重複送出＝更改答案
+  markPicked(btn);
 }
 function startGap(nextAt, now, isLast) {
   const off = Date.now() - now;
@@ -203,9 +207,9 @@ function renderQuestion(m, isPatient) {
   answered = false;
   clearInterval(gapTimer); $("you-next").textContent = "";
   show("v-q");
-  $("q-head").textContent = isPatient
+  $("q-head").textContent = (isPatient
     ? `病人 ${m.label}（第 ${m.i + 1}/${m.total} 位）· 限時 ${m.secs} 秒`
-    : `第 ${m.i + 1}/${m.total} 題 · 限時 ${m.secs} 秒`;
+    : `第 ${m.i + 1}/${m.total} 題 · 限時 ${m.secs} 秒`) + " ｜ 時間內可改答案";
   $("qtext").textContent = m.vign || m.text;
   const vb = $("pt-vitals");
   if (isPatient && m.vitals) {
@@ -276,8 +280,8 @@ function handle(m) {
     }
     case "sync": {
       if (m.you) { setScore(m.you.score); if (m.you.bedTotal) setBeds(m.you.beds, m.you.bedTotal); }
-      if (m.phase === "quiz" && m.q) { renderQuestion(m.q, false); if (m.you && m.you.answered) lockAnswers(null); }
-      else if (m.phase === "sim" && m.pt) { renderQuestion(m.pt, true); if (m.you && m.you.answered) lockAnswers(null); }
+      if (m.phase === "quiz" && m.q) { renderQuestion(m.q, false); }
+      else if (m.phase === "sim" && m.pt) { renderQuestion(m.pt, true); }
       else if (m.reveal) handle(m.reveal);
       else if (myName) show("v-wait");
       break;
