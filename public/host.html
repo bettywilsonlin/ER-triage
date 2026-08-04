@@ -52,6 +52,7 @@
   .c1 { background: var(--l1); color:#fff!important } .c2 { background: var(--l2); color:#fff!important }
   .c3 { background: var(--l3); } .c4 { background: var(--l4); color:#fff!important } .c5 { background: var(--l5); }
   .correct-tag { outline: 3px solid var(--green); outline-offset: 2px; border-radius: 6px; }
+  #ansline { font-size: 26px; font-weight: 700; color: var(--green); margin: 6px 0 4px; }
   #explain { font-size: 22px; line-height: 1.6; border-left: 4px solid var(--green); padding-left: 16px; margin-top: 10px; }
   #src { margin-top: 10px; font-size: 17px; }
   /* Event banner */
@@ -97,6 +98,7 @@
       <p id="progress" class="mut"></p>
       <div id="reveal-box" class="hidden">
         <div class="dist" id="dist"></div>
+        <p id="ansline"></p>
         <p id="explain"></p>
         <p id="src" class="mut"></p>
       </div>
@@ -221,6 +223,8 @@ function renderReveal(m) {
       row.querySelector(".bar").style.width = (100 * r.n / max) + "%";
     }));
   }
+  const correctLabel = m.options ? m.options[m.ans] : LV[m.ans];
+  $("ansline").textContent = "正解：" + correctLabel;
   $("explain").textContent = m.explain;
   $("src").textContent = "依據：" + m.src;
   renderBoard(m.board);
@@ -236,13 +240,19 @@ function handle(m) {
     case "progress": $("progress").textContent = `已作答 ${m.answered}/${m.players} 人`; break;
     case "reveal":    phase = "quiz_reveal"; setButtons(); renderReveal(m); break;
     case "pt_reveal": phase = "sim_reveal";  setButtons();
-      renderReveal(m); $("q-label").textContent = `病人 ${m.label} 檢傷結果`; break;
+      renderReveal(m); $("q-label").textContent = `病人 ${m.label} 檢傷結果`;
+      if (m.nextAt) {
+        startTimer(m.nextAt, m.now);
+        $("progress").textContent = m.isLast ? "🏁 本場最後一位，準備結算…" : "🚑 下一位病人抵達倒數…";
+      }
+      break;
     case "sim_intro":
       phase = "sim_wait"; setButtons(); show("v-q");
       $("q-label").textContent = "Round 2：檢傷站的一小時";
       $("vitals").style.display = "none"; $("reveal-box").classList.add("hidden");
       $("q-text").textContent = `病人即將依序抵達，每位限時作答。每人有急救床 ${m.beds} 張——分 1-2 級會佔床。Under-triage 的病人可能在候診區惡化。`;
-      $("timer").textContent = ""; $("progress").textContent = "";
+      if (m.firstAt) startTimer(m.firstAt, m.now);
+      $("progress").textContent = "🚑 第一位病人即將抵達…";
       break;
     case "evt": {
       const el = $("evt");

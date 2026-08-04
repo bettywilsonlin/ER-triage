@@ -96,6 +96,7 @@
     <div style="height:10px"></div>
     <p id="you-explain" style="font-size:15px;line-height:1.6"></p>
     <p class="mut" id="you-src" style="margin-top:8px"></p>
+    <p id="you-next" style="text-align:center;margin-top:12px;font-weight:600;color:var(--l4)"></p>
   </section>
 
   <!-- 結算 -->
@@ -110,7 +111,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const room = (new URL(location.href)).searchParams.get("room") || "MAIN";
-let ws, myName = "", offset = 0, timerReq = null, curDeadline = 0, curSecs = 0, answered = false;
+let ws, myName = "", offset = 0, timerReq = null, curDeadline = 0, curSecs = 0, answered = false, gapTimer = null;
 
 function show(id) {
   for (const v of ["v-join","v-wait","v-q","v-you","v-final"]) $(v).classList.add("hidden");
@@ -186,8 +187,21 @@ function sendAns(v, btn) {
   ws.send(JSON.stringify({ t: "ans", v }));
   lockAnswers(btn);
 }
+function startGap(nextAt, now, isLast) {
+  const off = Date.now() - now;
+  clearInterval(gapTimer);
+  const tick = () => {
+    const remain = Math.max(0, Math.ceil((nextAt - (Date.now() - off)) / 1000));
+    $("you-next").textContent = remain > 0
+      ? (isLast ? `🏁 準備結算… ${remain}s` : `🚑 下一位病人 ${remain}s`)
+      : (isLast ? "🏁 準備結算…" : "🚑 下一位病人抵達中…");
+    if (remain <= 0) clearInterval(gapTimer);
+  };
+  tick(); gapTimer = setInterval(tick, 250);
+}
 function renderQuestion(m, isPatient) {
   answered = false;
+  clearInterval(gapTimer); $("you-next").textContent = "";
   show("v-q");
   $("q-head").textContent = isPatient
     ? `病人 ${m.label}（第 ${m.i + 1}/${m.total} 位）· 限時 ${m.secs} 秒`
@@ -235,6 +249,8 @@ function handle(m) {
       show("v-you");
       $("you-explain").textContent = m.explain;
       $("you-src").textContent = "依據：" + m.src;
+      if (m.t === "pt_reveal" && m.nextAt) startGap(m.nextAt, m.now, m.isLast);
+      else $("you-next").textContent = "";
       break;
     }
     case "evt":
