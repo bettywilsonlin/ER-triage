@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TTAS 檢傷遊戲 · 講師端</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --l1: #1e6ff5; --l2: #e5484d; --l3: #f0b90b; --l4: #2f9e5f; --l5: #f4f4f2;
+    --bg: #0d1117; --panel: #161b22; --line: #2b3138; --ink: #e6e9ec; --mut: #8b949e;
+    --green: #7ce38b; --mono: "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--ink); min-height: 100vh; display: flex; flex-direction: column;
+         font-family: system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif; }
+  header { display: flex; justify-content: space-between; align-items: center;
+           padding: 14px 24px; border-bottom: 1px solid var(--line); }
+  header .title { font-weight: 700; letter-spacing: .5px; }
+  header .room { font-family: var(--mono); color: var(--green); }
+  #stage { flex: 1; display: grid; grid-template-columns: 1fr 320px; gap: 20px; padding: 20px 24px; }
+  #board-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; align-self: start; }
+  #board-panel h3 { font-size: 14px; color: var(--mut); margin-bottom: 10px; letter-spacing: 1px; }
+  #board li { list-style: none; display: flex; justify-content: space-between; padding: 7px 4px;
+              border-bottom: 1px solid var(--line); font-size: 17px; }
+  #board li span.sc { font-family: var(--mono); color: var(--green); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
+  .mut { color: var(--mut); }
+  .hidden { display: none !important; }
+  /* Lobby */
+  #v-lobby { text-align: center; }
+  #qr { display: inline-block; background: #fff; padding: 16px; border-radius: 12px; margin: 18px 0; }
+  #join-url { font-family: var(--mono); font-size: 20px; color: var(--green); word-break: break-all; }
+  #lobby-names { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 18px; }
+  #lobby-names span { background: #21262d; border: 1px solid var(--line); border-radius: 20px; padding: 6px 16px; font-size: 18px; }
+  /* Question */
+  #q-head { display: flex; justify-content: space-between; font-size: 16px; color: var(--mut); }
+  #timer { font-family: var(--mono); font-size: 40px; color: var(--green); }
+  #timer.low { color: var(--l2); }
+  #q-text { font-size: 30px; line-height: 1.55; margin: 20px 0; }
+  #vitals { font-family: var(--mono); font-size: 24px; color: var(--green); background: #0a0d10;
+            border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; margin-bottom: 16px;
+            display: none; letter-spacing: 1px; }
+  #progress { font-size: 20px; }
+  /* Reveal */
+  .dist { display: flex; flex-direction: column; gap: 10px; margin: 18px 0; }
+  .dist .row { display: flex; align-items: center; gap: 12px; }
+  .dist .lab { width: 220px; font-size: 18px; }
+  .dist .barwrap { flex: 1; background: #0a0d10; border-radius: 6px; height: 34px; overflow: hidden; }
+  .dist .bar { height: 100%; border-radius: 6px; min-width: 2px; transition: width .6s ease; display: flex;
+               align-items: center; justify-content: flex-end; padding-right: 8px; font-family: var(--mono); color: #0d1117; font-weight: 700; }
+  .c1 { background: var(--l1); color:#fff!important } .c2 { background: var(--l2); color:#fff!important }
+  .c3 { background: var(--l3); } .c4 { background: var(--l4); color:#fff!important } .c5 { background: var(--l5); }
+  .correct-tag { outline: 3px solid var(--green); outline-offset: 2px; border-radius: 6px; }
+  #explain { font-size: 22px; line-height: 1.6; border-left: 4px solid var(--green); padding-left: 16px; margin-top: 10px; }
+  #src { margin-top: 10px; font-size: 17px; }
+  /* Event banner */
+  #evt { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); background: #7f1d1d; border: 2px solid var(--l2);
+         color: #fff; padding: 18px 30px; border-radius: 12px; font-size: 24px; font-weight: 700;
+         display: none; box-shadow: 0 10px 40px rgba(229,72,77,.4); z-index: 10; animation: flash 1s infinite alternate; }
+  @keyframes flash { from { border-color: var(--l2); } to { border-color: #fff; } }
+  footer { display: flex; gap: 12px; padding: 14px 24px; border-top: 1px solid var(--line); }
+  footer button { font-size: 16px; padding: 10px 22px; border-radius: 10px; border: 1px solid var(--line);
+                  background: #21262d; color: var(--ink); cursor: pointer; }
+  footer button.go { background: var(--green); color: #0d1117; font-weight: 700; border: 0; }
+  footer button:disabled { opacity: .35; cursor: default; }
+  table.final { width: 100%; border-collapse: collapse; font-size: 19px; margin-top: 14px; }
+  table.final td, table.final th { padding: 10px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+  table.final th { color: var(--mut); font-weight: 500; font-size: 15px; }
+  #debrief { margin-top: 22px; font-size: 24px; color: var(--l3); }
+</style>
+</head>
+<body>
+<header>
+  <span class="title">TTAS 檢傷遊戲</span>
+  <span class="mut" id="phase-label"></span>
+  <span class="room">ROOM <span id="room-code"></span></span>
+</header>
+
+<div id="stage">
+  <div id="main-col">
+    <!-- Lobby -->
+    <section id="v-lobby" class="panel">
+      <h1 style="font-size:34px">掃描 QR code 加入</h1>
+      <div id="qr"></div>
+      <p id="join-url"></p>
+      <p class="mut" style="margin-top:10px">已加入 <span id="join-count" style="color:var(--green);font-family:var(--mono)">0</span> 人</p>
+      <div id="lobby-names"></div>
+    </section>
+
+    <!-- Question / Patient -->
+    <section id="v-q" class="panel hidden">
+      <div id="q-head"><span id="q-label"></span><span id="timer"></span></div>
+      <div style="height:14px"></div>
+      <div id="vitals"></div>
+      <p id="q-text"></p>
+      <p id="progress" class="mut"></p>
+      <div id="reveal-box" class="hidden">
+        <div class="dist" id="dist"></div>
+        <p id="explain"></p>
+        <p id="src" class="mut"></p>
+      </div>
+    </section>
+
+    <!-- Final -->
+    <section id="v-final" class="panel hidden">
+      <h1 id="final-title" style="font-size:32px"></h1>
+      <table class="final" id="final-table"></table>
+      <p id="debrief"></p>
+    </section>
+  </div>
+
+  <aside id="board-panel">
+    <h3>排行榜</h3>
+    <ul id="board"></ul>
+  </aside>
+</div>
+
+<div id="evt"></div>
+
+<footer>
+  <button id="b-quiz" class="go">開始 Round 1（快問快答）</button>
+  <button id="b-next" disabled>揭曉 / 下一題</button>
+  <button id="b-sim" disabled>開始 Round 2（檢傷站的一小時）</button>
+  <span style="flex:1"></span>
+  <button id="b-reset">重設本場</button>
+</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+let room = (new URL(location.href)).searchParams.get("room");
+if (!room) {
+  room = Array.from({ length: 4 }, () => "ABCDEFGHJKMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 31)]).join("");
+  history.replaceState(null, "", `?room=${room}`);
+}
+$("room-code").textContent = room;
+const joinUrl = `${location.origin}/?room=${room}`;
+$("join-url").textContent = joinUrl;
+new QRCode($("qr"), { text: joinUrl, width: 240, height: 240 });
+
+let ws, offset = 0, timerH = null, phase = "lobby";
+const LV = { 1: "1 級 復甦急救", 2: "2 級 危急", 3: "3 級 緊急", 4: "4 級 次緊急", 5: "5 級 非緊急" };
+
+function connect() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${proto}://${location.host}/ws?room=${room}&role=host`);
+  ws.onopen = () => ws.send(JSON.stringify({ t: "hello" }));
+  ws.onmessage = e => handle(JSON.parse(e.data));
+  ws.onclose = () => setTimeout(connect, 1200);
+}
+connect();
+
+$("b-quiz").onclick = () => ws.send(JSON.stringify({ t: "quiz_start" }));
+$("b-next").onclick = () => ws.send(JSON.stringify({ t: "next" }));
+$("b-sim").onclick  = () => ws.send(JSON.stringify({ t: "sim_start" }));
+$("b-reset").onclick = () => { if (confirm("確定重設？所有分數將清空。")) ws.send(JSON.stringify({ t: "reset" })); };
+
+function show(id) {
+  for (const v of ["v-lobby", "v-q", "v-final"]) $(v).classList.add("hidden");
+  $(id).classList.remove("hidden");
+}
+function setButtons() {
+  $("b-quiz").disabled = phase !== "lobby";
+  $("b-next").disabled = !(phase === "quiz" || phase === "quiz_reveal");
+  $("b-next").textContent = phase === "quiz" ? "提前揭曉" : "下一題";
+  $("b-sim").disabled = !(phase === "quiz_end" || phase === "lobby");
+  $("phase-label").textContent = ({ lobby: "大廳", quiz: "Round 1 作答中", quiz_reveal: "Round 1 揭曉",
+    quiz_end: "Round 1 結束", sim: "Round 2 作答中", sim_reveal: "Round 2 揭曉",
+    sim_wait: "Round 2 病人抵達中", sim_end: "Round 2 結束" })[phase] || "";
+}
+function startTimer(endsAt, now) {
+  offset = Date.now() - now;
+  clearInterval(timerH);
+  const tick = () => {
+    const remain = Math.max(0, Math.ceil((endsAt - (Date.now() - offset)) / 1000));
+    $("timer").textContent = remain + "s";
+    $("timer").classList.toggle("low", remain <= 5);
+    if (remain <= 0) clearInterval(timerH);
+  };
+  tick(); timerH = setInterval(tick, 250);
+}
+function renderBoard(board) {
+  $("board").innerHTML = board.map((r, i) =>
+    `<li><span>${i + 1}. ${esc(r.name)}</span><span class="sc">${r.score}</span></li>`).join("");
+}
+function renderQuestion(m, isPatient) {
+  show("v-q");
+  $("reveal-box").classList.add("hidden");
+  $("q-label").textContent = isPatient
+    ? `病人 ${m.label} 抵達（第 ${m.i + 1}/${m.total} 位）`
+    : `第 ${m.i + 1}/${m.total} 題`;
+  $("q-text").textContent = m.vign || m.text;
+  const vb = $("vitals");
+  if (isPatient && m.vitals) {
+    const v = m.vitals;
+    vb.textContent = `T ${v.T}°C   HR ${v.HR}   BP ${v.BP}   RR ${v.RR}   SpO2 ${v.SpO2}%`;
+    vb.style.display = "block";
+  } else vb.style.display = "none";
+  $("progress").textContent = "已作答 0 人";
+  startTimer(m.endsAt, m.now);
+}
+function renderReveal(m) {
+  show("v-q");
+  clearInterval(timerH); $("timer").textContent = "";
+  $("reveal-box").classList.remove("hidden");
+  $("progress").textContent = "";
+  const box = $("dist"); box.innerHTML = "";
+  const rows = [];
+  if (m.options) {
+    m.options.forEach((o, i) => rows.push({ lab: o, n: m.dist[i], cls: "c3", correct: i === m.ans }));
+  } else {
+    for (let l = 1; l <= 5; l++) rows.push({ lab: LV[l], n: m.dist[l - 1], cls: "c" + l, correct: l === m.ans });
+  }
+  const max = Math.max(1, ...rows.map(r => r.n));
+  for (const r of rows) {
+    const row = document.createElement("div"); row.className = "row";
+    row.innerHTML = `<div class="lab">${esc(r.lab)}${r.correct ? " ✓" : ""}</div>
+      <div class="barwrap${r.correct ? " correct-tag" : ""}"><div class="bar ${r.cls}" style="width:0%">${r.n || ""}</div></div>`;
+    box.appendChild(row);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      row.querySelector(".bar").style.width = (100 * r.n / max) + "%";
+    }));
+  }
+  $("explain").textContent = m.explain;
+  $("src").textContent = "依據：" + m.src;
+  renderBoard(m.board);
+}
+function handle(m) {
+  switch (m.t) {
+    case "lobby":
+      $("join-count").textContent = m.joined.length;
+      $("lobby-names").innerHTML = m.joined.map(n => `<span>${esc(n)}</span>`).join("");
+      break;
+    case "q":  phase = "quiz"; setButtons(); renderQuestion(m, false); break;
+    case "pt": phase = "sim";  setButtons(); renderQuestion(m, true);  break;
+    case "progress": $("progress").textContent = `已作答 ${m.answered}/${m.players} 人`; break;
+    case "reveal":    phase = "quiz_reveal"; setButtons(); renderReveal(m); break;
+    case "pt_reveal": phase = "sim_reveal";  setButtons();
+      renderReveal(m); $("q-label").textContent = `病人 ${m.label} 檢傷結果`; break;
+    case "sim_intro":
+      phase = "sim_wait"; setButtons(); show("v-q");
+      $("q-label").textContent = "Round 2：檢傷站的一小時";
+      $("vitals").style.display = "none"; $("reveal-box").classList.add("hidden");
+      $("q-text").textContent = `病人即將依序抵達，每位限時作答。每人有急救床 ${m.beds} 張——分 1-2 級會佔床。Under-triage 的病人可能在候診區惡化。`;
+      $("timer").textContent = ""; $("progress").textContent = "";
+      break;
+    case "evt": {
+      const el = $("evt");
+      el.textContent = `⚠ ${m.text}　肇事者：${m.victims.length ? m.victims.map(esc).join("、") : "（全隊倖免）"}（${m.penalty} 分）`;
+      el.style.display = "block";
+      clearTimeout(el._h); el._h = setTimeout(() => el.style.display = "none", 8000);
+      break;
+    }
+    case "quiz_end":
+      phase = "quiz_end"; setButtons(); show("v-final");
+      $("final-title").textContent = "Round 1 排行榜";
+      $("final-table").innerHTML = `<tr><th>#</th><th>暱稱</th><th>分數</th></tr>` +
+        m.board.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.name)}</td><td>${r.score}</td></tr>`).join("");
+      $("debrief").textContent = "";
+      renderBoard(m.board);
+      break;
+    case "sim_end": {
+      phase = "sim_end"; setButtons(); show("v-final");
+      $("final-title").textContent = `模擬結束 — 全隊觸發 ${m.teamDet} 次惡化事件`;
+      $("final-table").innerHTML =
+        `<tr><th>#</th><th>暱稱</th><th>總分</th><th>正確</th><th>Under</th><th>Over</th><th>無床</th><th>惡化</th></tr>` +
+        m.board.map((r, i) => {
+          const s = m.per[r.name] || {};
+          return `<tr><td>${i + 1}</td><td>${esc(r.name)}</td><td>${r.score}</td><td>${s.simCorrect ?? ""}</td><td>${s.under ?? ""}</td><td>${s.over ?? ""}</td><td>${s.noBed ?? ""}</td><td>${s.det ?? ""}</td></tr>`;
+        }).join("");
+      $("debrief").textContent = "Debrief：" + m.debrief;
+      renderBoard(m.board);
+      break;
+    }
+    case "sync":
+      phase = m.phase; setButtons(); renderBoard(m.board);
+      if (m.phase === "quiz" && m.q) renderQuestion(m.q, false);
+      else if (m.phase === "sim" && m.pt) renderQuestion(m.pt, true);
+      else if (m.reveal) handle(m.reveal);
+      else show("v-lobby");
+      break;
+    case "reset": location.reload(); break;
+  }
+}
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+</script>
+</body>
+</html>

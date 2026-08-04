@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>TTAS 檢傷遊戲</title>
+<style>
+  :root {
+    --l1: #1e6ff5; --l2: #e5484d; --l3: #f0b90b; --l4: #2f9e5f; --l5: #f4f4f2;
+    --bg: #f6f7f9; --ink: #1a1d21; --card: #ffffff; --mut: #6b7280;
+    --mono: "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+         background: var(--bg); color: var(--ink); min-height: 100dvh; display: flex; flex-direction: column; }
+  #top { display: flex; justify-content: space-between; align-items: center;
+         padding: 10px 14px; background: #111418; color: #fff; font-size: 14px; }
+  #top .score { font-family: var(--mono); font-size: 16px; }
+  #top .beds { letter-spacing: 2px; }
+  main { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 14px; max-width: 480px; width: 100%; margin: 0 auto; }
+  .card { background: var(--card); border-radius: 14px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  h1 { font-size: 20px; }
+  .mut { color: var(--mut); font-size: 13px; }
+  input[type=text] { width: 100%; font-size: 18px; padding: 12px; border: 1.5px solid #d5d9df; border-radius: 10px; }
+  button.primary { width: 100%; font-size: 18px; padding: 14px; border: 0; border-radius: 12px;
+                   background: #111418; color: #fff; font-weight: 600; }
+  #timerbar { height: 6px; border-radius: 3px; background: #e3e6ea; overflow: hidden; }
+  #timerbar > div { height: 100%; background: #111418; width: 100%; transition: width .2s linear; }
+  #qtext { font-size: 17px; line-height: 1.55; }
+  .levels { display: flex; flex-direction: column; gap: 10px; }
+  .lv { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 12px;
+        border: 0; font-size: 17px; font-weight: 700; color: #fff; text-align: left; }
+  .lv small { font-weight: 400; opacity: .9; }
+  .lv[data-l="1"] { background: var(--l1); }
+  .lv[data-l="2"] { background: var(--l2); }
+  .lv[data-l="3"] { background: var(--l3); color: #1a1d21; }
+  .lv[data-l="4"] { background: var(--l4); }
+  .lv[data-l="5"] { background: var(--l5); color: #1a1d21; border: 1.5px solid #c9cdd3; }
+  .lv:disabled { opacity: .35; }
+  .lv.picked { outline: 3px solid #111418; outline-offset: 2px; opacity: 1; }
+  .opt { padding: 14px; border-radius: 12px; border: 1.5px solid #c9cdd3; background: #fff;
+         font-size: 16px; text-align: left; line-height: 1.4; }
+  .opt.picked { border-color: #111418; background: #111418; color: #fff; }
+  .opt:disabled { opacity: .4; }
+  .big { font-size: 44px; font-weight: 800; text-align: center; }
+  .ok { color: var(--l4); } .bad { color: var(--l2); }
+  #toast { position: fixed; left: 12px; right: 12px; bottom: 18px; background: var(--l2); color: #fff;
+           padding: 14px; border-radius: 12px; font-weight: 600; display: none; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+  .vitals { font-family: var(--mono); font-size: 14px; background: #0d1117; color: #7ce38b;
+            border-radius: 10px; padding: 10px 12px; line-height: 1.7; }
+  .hidden { display: none !important; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td, th { padding: 6px 4px; border-bottom: 1px solid #e7e9ec; text-align: left; }
+</style>
+</head>
+<body>
+<div id="top">
+  <span id="me">TTAS 檢傷遊戲</span>
+  <span class="beds" id="beds"></span>
+  <span class="score" id="score"></span>
+</div>
+<main>
+  <!-- 加入 -->
+  <section id="v-join" class="card">
+    <h1>加入遊戲</h1>
+    <p class="mut" style="margin:8px 0 12px">輸入你的暱稱（同一堂課請勿重複）</p>
+    <input id="name" type="text" maxlength="12" placeholder="例如：小明" autocomplete="off">
+    <div style="height:12px"></div>
+    <button class="primary" id="btn-join">進入檢傷站</button>
+    <p class="mut" id="join-err" style="margin-top:8px"></p>
+  </section>
+
+  <!-- 等待 -->
+  <section id="v-wait" class="card hidden">
+    <h1 id="wait-title">已就位</h1>
+    <p class="mut" id="wait-sub" style="margin-top:8px">等待講師開始……</p>
+  </section>
+
+  <!-- 題目 / 病人 -->
+  <section id="v-q" class="hidden">
+    <div class="card">
+      <p class="mut" id="q-head"></p>
+      <div style="height:8px"></div>
+      <div id="timerbar"><div id="timerfill"></div></div>
+      <div style="height:12px"></div>
+      <div id="pt-vitals" class="vitals hidden"></div>
+      <p id="qtext" style="margin-top:10px"></p>
+    </div>
+    <div class="levels" id="answers" style="margin-top:12px"></div>
+  </section>
+
+  <!-- 個人揭曉 -->
+  <section id="v-you" class="card hidden">
+    <p class="big" id="you-main"></p>
+    <p class="mut" style="text-align:center" id="you-sub"></p>
+    <div style="height:10px"></div>
+    <p id="you-explain" style="font-size:15px;line-height:1.6"></p>
+    <p class="mut" id="you-src" style="margin-top:8px"></p>
+  </section>
+
+  <!-- 結算 -->
+  <section id="v-final" class="card hidden">
+    <h1 id="final-title">結算</h1>
+    <div style="height:10px"></div>
+    <table id="final-table"></table>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const room = (new URL(location.href)).searchParams.get("room") || "MAIN";
+let ws, myName = "", offset = 0, timerReq = null, curDeadline = 0, curSecs = 0, answered = false;
+
+function show(id) {
+  for (const v of ["v-join","v-wait","v-q","v-you","v-final"]) $(v).classList.add("hidden");
+  $(id).classList.remove("hidden");
+}
+function connect() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${proto}://${location.host}/ws?room=${encodeURIComponent(room)}`);
+  ws.onopen = () => { if (myName) ws.send(JSON.stringify({ t: "join", name: myName })); };
+  ws.onmessage = e => handle(JSON.parse(e.data));
+  ws.onclose = () => setTimeout(connect, 1200);
+}
+connect();
+
+$("btn-join").onclick = () => {
+  const n = $("name").value.trim();
+  if (!n) { $("join-err").textContent = "請輸入暱稱"; return; }
+  myName = n;
+  try { localStorage.setItem("ttas_name", n); } catch {}
+  if (ws.readyState === 1) ws.send(JSON.stringify({ t: "join", name: n }));
+  else $("join-err").textContent = "連線中，請再按一次";
+};
+try { const saved = localStorage.getItem("ttas_name"); if (saved) $("name").value = saved; } catch {}
+
+function setScore(s) { $("score").textContent = s === undefined ? "" : `${s} 分`; }
+function setBeds(used, total) {
+  if (total === undefined) { $("beds").textContent = ""; return; }
+  $("beds").textContent = "🛏".repeat(total - used) + "▪".repeat(used);
+}
+function toast(text, color) {
+  const t = $("toast");
+  t.textContent = text; t.style.background = color || "#e5484d"; t.style.display = "block";
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", 4500);
+}
+function startTimer(endsAt, now, secs) {
+  offset = Date.now() - now;
+  curDeadline = endsAt; curSecs = secs;
+  cancelAnimationFrame(timerReq);
+  const tick = () => {
+    const remain = Math.max(0, curDeadline - (Date.now() - offset));
+    $("timerfill").style.width = (100 * remain / (curSecs * 1000)) + "%";
+    if (remain > 0) timerReq = requestAnimationFrame(tick);
+  };
+  tick();
+}
+function levelButtons(onPick) {
+  const labels = { 1: "復甦急救", 2: "危急", 3: "緊急", 4: "次緊急", 5: "非緊急" };
+  const box = $("answers"); box.innerHTML = "";
+  for (let l = 1; l <= 5; l++) {
+    const b = document.createElement("button");
+    b.className = "lv"; b.dataset.l = l;
+    b.innerHTML = `${l} 級 <small>${labels[l]}</small>`;
+    b.onclick = () => onPick(l, b);
+    box.appendChild(b);
+  }
+}
+function choiceButtons(options, onPick) {
+  const box = $("answers"); box.innerHTML = "";
+  options.forEach((o, i) => {
+    const b = document.createElement("button");
+    b.className = "opt"; b.textContent = o;
+    b.onclick = () => onPick(i, b);
+    box.appendChild(b);
+  });
+}
+function lockAnswers(pickedBtn) {
+  answered = true;
+  document.querySelectorAll("#answers button").forEach(b => b.disabled = true);
+  if (pickedBtn) { pickedBtn.disabled = false; pickedBtn.classList.add("picked"); }
+}
+function sendAns(v, btn) {
+  if (answered) return;
+  ws.send(JSON.stringify({ t: "ans", v }));
+  lockAnswers(btn);
+}
+function renderQuestion(m, isPatient) {
+  answered = false;
+  show("v-q");
+  $("q-head").textContent = isPatient
+    ? `病人 ${m.label}（第 ${m.i + 1}/${m.total} 位）· 限時 ${m.secs} 秒`
+    : `第 ${m.i + 1}/${m.total} 題 · 限時 ${m.secs} 秒`;
+  $("qtext").textContent = m.vign || m.text;
+  const vb = $("pt-vitals");
+  if (isPatient && m.vitals) {
+    const v = m.vitals;
+    vb.textContent = `T ${v.T}°C  HR ${v.HR}  BP ${v.BP}  RR ${v.RR}  SpO2 ${v.SpO2}%`;
+    vb.classList.remove("hidden");
+  } else vb.classList.add("hidden");
+  if (!isPatient && m.kind === "choice") choiceButtons(m.options, sendAns);
+  else levelButtons(sendAns);
+  startTimer(m.endsAt, m.now, m.secs);
+}
+function handle(m) {
+  switch (m.t) {
+    case "joined":
+      setScore(m.score); $("me").textContent = m.name;
+      show("v-wait"); break;
+    case "lobby":
+      if ($("v-wait").classList.contains("hidden") === false)
+        $("wait-sub").textContent = `已加入 ${m.joined.length} 人，等待講師開始……`;
+      break;
+    case "q": renderQuestion(m, false); break;
+    case "pt": renderQuestion(m, true); break;
+    case "sim_intro":
+      show("v-wait");
+      $("wait-title").textContent = "Round 2：檢傷站的一小時";
+      $("wait-sub").textContent = `病人即將抵達。你有 ${m.beds} 張急救床（分 1-2 級會佔床）。Under-triage 的病人可能會在候診區惡化——小心。`;
+      break;
+    case "you": {
+      show("v-you");
+      if (m.event === "det") { toast(`⚠ ${m.text}（${m.delta} 分）`); setScore(m.score); break; }
+      if (m.event === "nobed") { toast(`🛏 急救床已滿！額外 ${m.delta} 分`, "#b45309"); break; }
+      $("you-main").textContent = m.missed ? "未作答" : (m.correct ? `正確 +${m.delta}` : "答錯");
+      $("you-main").className = "big " + (m.correct ? "ok" : "bad");
+      $("you-sub").textContent = `目前總分 ${m.score}`;
+      $("you-explain").textContent = ""; $("you-src").textContent = "";
+      setScore(m.score);
+      break;
+    }
+    case "reveal": case "pt_reveal": {
+      // 個人畫面補上解說（you 訊息先到、reveal 後到）
+      show("v-you");
+      $("you-explain").textContent = m.explain;
+      $("you-src").textContent = "依據：" + m.src;
+      break;
+    }
+    case "evt":
+      if (!m.victims.includes(myName)) toast(`⚠ ${m.label} ${m.text}`, "#7f1d1d");
+      break;
+    case "beds": setBeds(m.used, m.total); break;
+    case "quiz_end": {
+      show("v-final");
+      $("final-title").textContent = "Round 1 結束";
+      const rows = m.board.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.name)}</td><td>${r.score}</td></tr>`).join("");
+      $("final-table").innerHTML = `<tr><th>#</th><th>暱稱</th><th>分數</th></tr>${rows}`;
+      break;
+    }
+    case "sim_end": {
+      show("v-final");
+      $("final-title").textContent = "模擬結束";
+      const me = m.per[myName];
+      let html = `<tr><th>#</th><th>暱稱</th><th>分數</th></tr>` +
+        m.board.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.name)}</td><td>${r.score}</td></tr>`).join("");
+      if (me) html += `<tr><td colspan="3" class="mut">你的模擬表現：正確 ${me.simCorrect}、under ${me.under}、over ${me.over}、無床 ${me.noBed}、惡化事件 ${me.det}</td></tr>`;
+      $("final-table").innerHTML = html;
+      break;
+    }
+    case "sync": {
+      if (m.you) { setScore(m.you.score); if (m.you.bedTotal) setBeds(m.you.beds, m.you.bedTotal); }
+      if (m.phase === "quiz" && m.q) { renderQuestion(m.q, false); if (m.you && m.you.answered) lockAnswers(null); }
+      else if (m.phase === "sim" && m.pt) { renderQuestion(m.pt, true); if (m.you && m.you.answered) lockAnswers(null); }
+      else if (m.reveal) handle(m.reveal);
+      else if (myName) show("v-wait");
+      break;
+    }
+    case "reset": location.reload(); break;
+  }
+}
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+</script>
+</body>
+</html>
