@@ -168,8 +168,12 @@ function show(id) {
 }
 function setButtons() {
   $("b-quiz").disabled = phase !== "lobby";
-  $("b-next").disabled = !(phase === "quiz" || phase === "quiz_reveal");
-  $("b-next").textContent = phase === "quiz" ? "提前揭曉" : "下一題";
+  $("b-next").disabled = !["quiz","quiz_reveal","sim","sim_reveal","sim_wait"].includes(phase);
+  $("b-next").textContent =
+    phase === "quiz" ? "提前揭曉" :
+    phase === "quiz_reveal" ? "下一題" :
+    phase === "sim" ? "提前揭曉" :
+    (phase === "sim_reveal" || phase === "sim_wait") ? "下一位病人 ▶" : "揭曉 / 下一題";
   $("b-sim").disabled = !(phase === "quiz_end" || phase === "lobby");
   $("phase-label").textContent = ({ lobby: "大廳", quiz: "Round 1 作答中", quiz_reveal: "Round 1 揭曉",
     quiz_end: "Round 1 結束", sim: "Round 2 作答中", sim_reveal: "Round 2 揭曉",
