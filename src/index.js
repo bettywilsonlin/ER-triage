@@ -204,7 +204,7 @@ export class GameRoom {
     await this.ctx.storage.setAlarm(this.s.deadline);
     await this.save();
     this.broadcast({ t: "sim_intro", total: PATIENTS.length, beds: CONFIG.bedCount,
-                     now: Date.now(), firstAt });
+                     now: Date.now(), firstAt, board: this.board() });
   }
 
   async arrivePatient() {
@@ -235,7 +235,7 @@ export class GameRoom {
     const pt = PATIENTS[this.s.pi];
     return { t: "pt", i: this.s.pi, total: PATIENTS.length, label: pt.label,
              vign: pt.vign, vitals: pt.vitals, secs: CONFIG.ptSecs,
-             endsAt: this.s.deadline, now: Date.now() };
+             endsAt: this.s.deadline, now: Date.now(), board: this.board() };
   }
 
   fireDeterioration(d) {
@@ -348,7 +348,7 @@ export class GameRoom {
   // ---------- 傳訊工具 ----------
   board() {
     return Object.entries(this.s.players)
-      .map(([name, p]) => ({ name, score: p.score }))
+      .map(([name, p]) => ({ name, score: p.score, beds: p.beds.length }))
       .sort((a, b) => b.score - a.score);
   }
 
