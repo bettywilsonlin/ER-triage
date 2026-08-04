@@ -94,6 +94,8 @@ export class GameRoom {
       case "next":
         if (this.s.phase === PHASES.QUIZ) await this.revealQuiz();          // 提前揭曉
         else if (this.s.phase === PHASES.QUIZ_REVEAL) await this.nextQuiz();
+        else if (this.s.phase === PHASES.SIM) await this.revealPatient();   // 模擬：提前揭曉本病人
+        else if (this.s.phase === PHASES.SIM_WAIT) await this.arrivePatient(); // 模擬：跳過等待，下一位立即抵達
         break;
       case "sim_start": if (this.s.phase === PHASES.QUIZ_END || this.s.phase === PHASES.LOBBY) await this.startSim(); break;
       case "reset":
