@@ -21,9 +21,13 @@
   #stage { flex: 1; display: grid; grid-template-columns: 1fr 320px; gap: 20px; padding: 20px 24px; }
   #board-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; align-self: start; }
   #board-panel h3 { font-size: 14px; color: var(--mut); margin-bottom: 10px; letter-spacing: 1px; }
-  #board li { list-style: none; display: flex; justify-content: space-between; padding: 7px 4px;
+  #board li { list-style: none; display: flex; align-items: center; gap: 8px; padding: 7px 4px;
               border-bottom: 1px solid var(--line); font-size: 17px; }
+  #board li span.nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #board li span.sc { font-family: var(--mono); color: var(--green); }
+  #board li span.bedcell { font-family: var(--mono); font-size: 15px; white-space: nowrap; letter-spacing: 1px; }
+  #board li span.bedcell.full { color: var(--l2); font-weight: 700; }
+  #bed-legend { font-size: 12px; color: var(--mut); margin-bottom: 8px; }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
   .mut { color: var(--mut); }
   .hidden { display: none !important; }
@@ -114,6 +118,7 @@
 
   <aside id="board-panel">
     <h3>排行榜</h3>
+    <p id="bed-legend" class="hidden">🛏 空床　🟥 佔用中（每人 <span id="bedtot">2</span> 床）</p>
     <ul id="board"></ul>
   </aside>
 </div>
@@ -140,7 +145,7 @@ const joinUrl = `${location.origin}/?room=${room}`;
 $("join-url").textContent = joinUrl;
 new QRCode($("qr"), { text: joinUrl, width: 240, height: 240 });
 
-let ws, offset = 0, timerH = null, phase = "lobby";
+let ws, offset = 0, timerH = null, phase = "lobby", bedTotal = 2;
 const LV = { 1: "1 級 復甦急救", 2: "2 級 危急", 3: "3 級 緊急", 4: "4 級 次緊急", 5: "5 級 非緊急" };
 
 function connect() {
@@ -182,8 +187,18 @@ function startTimer(endsAt, now) {
   tick(); timerH = setInterval(tick, 250);
 }
 function renderBoard(board) {
-  $("board").innerHTML = board.map((r, i) =>
-    `<li><span>${i + 1}. ${esc(r.name)}</span><span class="sc">${r.score}</span></li>`).join("");
+  const sim = phase && phase.indexOf("sim") === 0;
+  $("bed-legend").classList.toggle("hidden", !sim);
+  $("bedtot").textContent = bedTotal;
+  $("board").innerHTML = board.map((r, i) => {
+    let beds = "";
+    if (sim && r.beds !== undefined) {
+      const used = Math.min(r.beds, bedTotal), free = Math.max(0, bedTotal - used);
+      const full = used >= bedTotal ? " full" : "";
+      beds = `<span class="bedcell${full}">${"🛏".repeat(free)}${"🟥".repeat(used)} ${used}/${bedTotal}${used >= bedTotal ? " 滿" : ""}</span>`;
+    }
+    return `<li><span class="nm">${i + 1}. ${esc(r.name)}</span>${beds}<span class="sc">${r.score}</span></li>`;
+  }).join("");
 }
 function renderQuestion(m, isPatient) {
   show("v-q");
@@ -236,7 +251,7 @@ function handle(m) {
       $("lobby-names").innerHTML = m.joined.map(n => `<span>${esc(n)}</span>`).join("");
       break;
     case "q":  phase = "quiz"; setButtons(); renderQuestion(m, false); break;
-    case "pt": phase = "sim";  setButtons(); renderQuestion(m, true);  break;
+    case "pt": phase = "sim";  setButtons(); renderQuestion(m, true); if (m.board) renderBoard(m.board); break;
     case "progress": $("progress").textContent = `已作答 ${m.answered}/${m.players} 人`; break;
     case "reveal":    phase = "quiz_reveal"; setButtons(); renderReveal(m); break;
     case "pt_reveal": phase = "sim_reveal";  setButtons();
@@ -248,6 +263,8 @@ function handle(m) {
       break;
     case "sim_intro":
       phase = "sim_wait"; setButtons(); show("v-q");
+      if (m.beds) bedTotal = m.beds;
+      if (m.board) renderBoard(m.board);
       $("q-label").textContent = "Round 2：檢傷站的一小時";
       $("vitals").style.display = "none"; $("reveal-box").classList.add("hidden");
       $("q-text").textContent = `病人即將依序抵達，每位限時作答。每人有急救床 ${m.beds} 張——分 1-2 級會佔床。Under-triage 的病人可能在候診區惡化。`;
