@@ -135,18 +135,14 @@ export class GameRoom {
     const inSim = this.s.phase === PHASES.SIM;
     if (!inQuiz && !inSim) return;
     if (Date.now() > this.s.deadline) return;
-    if (this.s.answers[name] !== undefined) return;   // 一人一票，不可改
     v = Number(v);
     if (!Number.isInteger(v)) return;
-    this.s.answers[name] = { v, at: Date.now() };
+    this.s.answers[name] = { v, at: Date.now() };     // 時間內可重複覆蓋＝更改答案（速度加成以最後送出時間計）
     await this.save();
     this.broadcast({ t: "progress", answered: Object.keys(this.s.answers).length,
                      players: Object.keys(this.s.players).length });
-    // 全員作答完畢 → 自動揭曉
-    if (Object.keys(this.s.answers).length >= Object.keys(this.s.players).length) {
-      if (inQuiz) await this.revealQuiz();
-      else await this.revealPatient();
-    }
+    // 不再「全員答完就自動揭曉」——讓所有人在時限內都能改答案；
+    // 由計時器（時間到）或講師按「提前揭曉」來揭曉。
   }
 
   async revealQuiz() {
