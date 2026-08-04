@@ -199,11 +199,12 @@ export class GameRoom {
     this.s.pendingDet = [];
     for (const p of Object.values(this.s.players)) p.beds = [];
     this.s.lastReveal = null;
-    await this.save();
-    this.broadcast({ t: "sim_intro", total: PATIENTS.length, beds: CONFIG.bedCount, now: Date.now() });
-    this.s.deadline = Date.now() + 5000;             // 5 秒後第一位病人抵達
+    const firstAt = Date.now() + 5000;               // 5 秒後第一位病人抵達
+    this.s.deadline = firstAt;
     await this.ctx.storage.setAlarm(this.s.deadline);
     await this.save();
+    this.broadcast({ t: "sim_intro", total: PATIENTS.length, beds: CONFIG.bedCount,
+                     now: Date.now(), firstAt });
   }
 
   async arrivePatient() {
@@ -306,16 +307,19 @@ export class GameRoom {
     if (victims.length) {
       this.s.pendingDet.push({ dueArrival: this.s.pi + CONFIG.detDelayPatients, ptIndex: this.s.pi, victims });
     }
+    // 先算好下一位病人抵達時間，讓投影端與手機端能倒數（不改變任何計分或抵達邏輯）
+    const nextAt = Date.now() + CONFIG.ptGapSecs * 1000;
+    const isLast = this.s.pi + 1 >= PATIENTS.length;
     this.s.lastReveal = { t: "pt_reveal", i: this.s.pi, label: pt.label, ans: pt.ans, dist,
-                          explain: pt.explain, src: pt.src, board: this.board() };
-    await this.save();
-    this.broadcast(this.s.lastReveal);
+                          explain: pt.explain, src: pt.src, board: this.board(),
+                          nextAt, now: Date.now(), gapSecs: CONFIG.ptGapSecs, isLast };
 
     // 排下一位病人抵達
     this.s.phase = PHASES.SIM_WAIT;
-    this.s.deadline = Date.now() + CONFIG.ptGapSecs * 1000;
+    this.s.deadline = nextAt;
     await this.ctx.storage.setAlarm(this.s.deadline);
     await this.save();
+    this.broadcast(this.s.lastReveal);
   }
 
   async endSim() {
