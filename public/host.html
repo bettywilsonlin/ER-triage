@@ -133,6 +133,14 @@
   <button id="b-reset">重設本場</button>
 </footer>
 
+<!-- course 專用控制列（與 classic 控制列並存，不共用按鈕），依 phase 各自啟用 -->
+<footer id="course-footer">
+  <button id="b-course" class="go">開始課程（course）</button>
+  <button id="b-showdist" disabled>顯示分佈</button>
+  <button id="b-reveal" disabled>揭曉答案</button>
+  <button id="b-cnext" disabled>下一題</button>
+</footer>
+
 <script>
 const $ = id => document.getElementById(id);
 let room = (new URL(location.href)).searchParams.get("room");
@@ -147,6 +155,9 @@ new QRCode($("qr"), { text: joinUrl, width: 240, height: 240 });
 
 let ws, offset = 0, timerH = null, phase = "lobby", bedTotal = 2;
 const LV = { 1: "1 級 復甦急救", 2: "2 級 危急", 3: "3 級 緊急", 4: "4 級 次緊急", 5: "5 級 非緊急" };
+// course 專用暫存：cdist 訊息本身不帶 options，choice 題要畫分佈長條的選項標籤時
+// 只能靠這裡存的「上一題 cq」，見 renderDistOnly。
+let curCourseQ = null;
 
 function connect() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -161,6 +172,12 @@ $("b-quiz").onclick = () => ws.send(JSON.stringify({ t: "quiz_start" }));
 $("b-next").onclick = () => ws.send(JSON.stringify({ t: "next" }));
 $("b-sim").onclick  = () => ws.send(JSON.stringify({ t: "sim_start" }));
 $("b-reset").onclick = () => { if (confirm("確定重設？所有分數將清空。")) ws.send(JSON.stringify({ t: "reset" })); };
+
+// course 三段式按鈕（各自獨立送出訊息，絕不合併連跳）
+$("b-course").onclick   = () => ws.send(JSON.stringify({ t: "course_start" }));
+$("b-showdist").onclick = () => ws.send(JSON.stringify({ t: "show_dist" }));
+$("b-reveal").onclick   = () => ws.send(JSON.stringify({ t: "reveal" }));
+$("b-cnext").onclick    = () => ws.send(JSON.stringify({ t: "course_next" }));
 
 function show(id) {
   for (const v of ["v-lobby", "v-q", "v-final"]) $(v).classList.add("hidden");
@@ -178,6 +195,11 @@ function setButtons() {
   $("phase-label").textContent = ({ lobby: "大廳", quiz: "Round 1 作答中", quiz_reveal: "Round 1 揭曉",
     quiz_end: "Round 1 結束", sim: "Round 2 作答中", sim_reveal: "Round 2 揭曉",
     sim_wait: "Round 2 病人抵達中", sim_end: "Round 2 結束" })[phase] || "";
+  // course 分支（新增，不動上面 classic 既有行）：三顆揭曉按鈕依 phase 各自獨立亮起，不可連跳
+  $("b-course").disabled   = phase !== "lobby";
+  $("b-showdist").disabled = phase !== "course_q";
+  $("b-reveal").disabled   = phase !== "course_dist";
+  $("b-cnext").disabled    = phase !== "course_reveal";
 }
 function startTimer(endsAt, now) {
   offset = Date.now() - now;
@@ -248,6 +270,74 @@ function renderReveal(m) {
   $("src").textContent = "依據：" + m.src;
   renderBoard(m.board);
 }
+// ---- course 三段式渲染（新增，不動上面 classic 的 renderQuestion/renderReveal） ----
+function renderCourseQ(m) {
+  // cq 訊息 shape 與 classic 的 q 相同（i/total/kind/text/options/secs/endsAt/now），
+  // 直接重用 renderQuestion 畫題目＋倒數計時即可。
+  curCourseQ = m; // 暫存本題，cdist 階段沒有 options，靠這份存的資料畫選項標籤
+  renderQuestion(m, false);
+}
+function renderDistOnly(m) {
+  // cdist 只有 {t,i,kind,dist}，沒有 ans/options/explain/src ——
+  // 這裡刻意「藏答案」：不標 ✓、不判 correct、ansline/explain/src 全設空字串。
+  show("v-q");
+  clearInterval(timerH); $("timer").textContent = "";
+  $("reveal-box").classList.remove("hidden");
+  $("progress").textContent = "";
+  const box = $("dist"); box.innerHTML = "";
+  const rows = [];
+  if (m.kind === "choice") {
+    // choice 題的選項標籤 cdist 本身沒有，用暫存的 curCourseQ.options（同一題才可信）
+    const opts = (curCourseQ && curCourseQ.i === m.i) ? curCourseQ.options : [];
+    opts.forEach((o, i) => rows.push({ lab: o, n: m.dist[i], cls: "c3" }));
+  } else {
+    for (let l = 1; l <= 5; l++) rows.push({ lab: LV[l], n: m.dist[l - 1], cls: "c" + l });
+  }
+  const max = Math.max(1, ...rows.map(r => r.n));
+  for (const r of rows) {
+    const row = document.createElement("div"); row.className = "row";
+    // 不加 correct-tag、不加 " ✓"：分佈階段畫面看不到任何正解線索
+    row.innerHTML = `<div class="lab">${esc(r.lab)}</div>
+      <div class="barwrap"><div class="bar ${r.cls}" style="width:0%">${r.n || ""}</div></div>`;
+    box.appendChild(row);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      row.querySelector(".bar").style.width = (100 * r.n / max) + "%";
+    }));
+  }
+  // 明確清空，確保 Kolb 停頓：先看大家怎麼分，還不揭曉答案/解析/依據
+  $("ansline").textContent = "";
+  $("explain").textContent = "";
+  $("src").textContent = "";
+}
+function renderCourseReveal(m) {
+  // creveal 有完整 ans/options/explain/src，畫法與 classic renderReveal 相同（含 ✓ 與正解/解析/依據）。
+  // renderBoard(m.board) 由呼叫端（handle 的 case "creveal"）另外呼叫，維持與 brief 給的 case 寫法一致。
+  show("v-q");
+  clearInterval(timerH); $("timer").textContent = "";
+  $("reveal-box").classList.remove("hidden");
+  $("progress").textContent = "";
+  const box = $("dist"); box.innerHTML = "";
+  const rows = [];
+  if (m.options) {
+    m.options.forEach((o, i) => rows.push({ lab: o, n: m.dist[i], cls: "c3", correct: i === m.ans }));
+  } else {
+    for (let l = 1; l <= 5; l++) rows.push({ lab: LV[l], n: m.dist[l - 1], cls: "c" + l, correct: l === m.ans });
+  }
+  const max = Math.max(1, ...rows.map(r => r.n));
+  for (const r of rows) {
+    const row = document.createElement("div"); row.className = "row";
+    row.innerHTML = `<div class="lab">${esc(r.lab)}${r.correct ? " ✓" : ""}</div>
+      <div class="barwrap${r.correct ? " correct-tag" : ""}"><div class="bar ${r.cls}" style="width:0%">${r.n || ""}</div></div>`;
+    box.appendChild(row);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      row.querySelector(".bar").style.width = (100 * r.n / max) + "%";
+    }));
+  }
+  const correctLabel = m.options ? m.options[m.ans] : LV[m.ans];
+  $("ansline").textContent = "正解：" + correctLabel;
+  $("explain").textContent = m.explain;
+  $("src").textContent = "依據：" + m.src;
+}
 function handle(m) {
   switch (m.t) {
     case "lobby":
@@ -303,6 +393,10 @@ function handle(m) {
       renderBoard(m.board);
       break;
     }
+    // course 三段式（新增，不動上面 classic 的 case q/pt/reveal/pt_reveal/...）
+    case "cq":      phase = "course_q";     setButtons(); renderCourseQ(m); break;
+    case "cdist":   phase = "course_dist";  setButtons(); renderDistOnly(m); break;
+    case "creveal": phase = "course_reveal";setButtons(); renderCourseReveal(m); renderBoard(m.board); break;
     case "sync":
       phase = m.phase; setButtons(); renderBoard(m.board);
       if (m.phase === "quiz" && m.q) renderQuestion(m.q, false);
