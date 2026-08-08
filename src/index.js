@@ -245,8 +245,14 @@ export class GameRoom {
     const q = QUIZ[this.s.ci];
     this.s.phase = PHASES.COURSE_REVEAL;
     const total = this.quizSecs(q) * 1000;
+    // host.html 的 renderCourseReveal() 靠 m.dist 畫分佈長條（與 revealQuiz/courseShowDist 同算法），
+    // 少了這欄會在 host 端拋 TypeError、讓 course_reveal 畫面空白（M1 端到端測試發現的 bug）。
+    const nOpts = q.kind === "choice" ? q.options.length : 5;
+    const dist = new Array(nOpts).fill(0);
 
     for (const [name, a] of Object.entries(this.s.answers)) {
+      const idx = q.kind === "choice" ? a.v : a.v - 1;
+      if (idx >= 0 && idx < nOpts) dist[idx]++;
       const p = this.s.players[name];
       if (!p) continue;
       const correct = a.v === q.ans;
@@ -267,7 +273,7 @@ export class GameRoom {
     }
     const payload = { t: "creveal", i: this.s.ci, ans: q.ans,
                       options: q.kind === "choice" ? q.options : null,
-                      explain: q.explain, src: q.src, board: this.board() };
+                      dist, explain: q.explain, src: q.src, board: this.board() };
     this.s.lastReveal = payload;
     await this.save();
     this.broadcast(payload);

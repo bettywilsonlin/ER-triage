@@ -23,6 +23,11 @@ it("course 三段式：Q → DIST（不含答案）→ REVEAL（含答案）", a
     const rev = await I.courseReveal();     // → COURSE_REVEAL
     expect(I.s.phase).toBe("course_reveal");
     expect(rev).toHaveProperty("ans");             // 揭曉才有答案
+    // M1 端到端測試發現：creveal payload 原本沒帶 dist，host.html renderCourseReveal()
+    // 讀 m.dist[l-1] 會拋 TypeError，導致揭曉畫面空白（無正解/✓/解說）。這裡驗證 dist 有補上。
+    expect(Array.isArray(rev.dist)).toBe(true);
+    expect(rev.dist).toHaveLength(5);              // level-kind 固定 5 級
+    expect(rev.dist[0]).toBe(1);                   // A 答 v:1 → idx = v-1 = 0
   });
 });
 
@@ -61,6 +66,9 @@ it("course 三段式（choice-kind）：dist 用原始索引、reveal 正確計�
     expect(rev.ans).toBe(2);
     expect(I.s.players["C"].score).toBeGreaterThan(0);     // 答對應計分
     expect(I.s.players["C"].stats.qCorrect).toBe(1);
+    expect(Array.isArray(rev.dist)).toBe(true);
+    expect(rev.dist).toHaveLength(4);               // choice-kind：QUIZ[3] 有 4 個選項
+    expect(rev.dist[2]).toBe(1);                    // choice 用原始索引 a.v（不減一）
   });
 });
 
