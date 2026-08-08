@@ -25,7 +25,7 @@ Round 1 快問快答（12 題）+ Round 2「檢傷站的一小時」模擬（10 
 
 ## 部署（一次性設定）
 
-1. 安裝 Node.js ≥ 18
+1. 安裝 Node.js ≥ 22（wrangler 4.x 需求）
 2. `npm install`
 3. `npx wrangler login`（開瀏覽器登入 Cloudflare 帳號，免費註冊即可）
 4. `npx wrangler deploy`
