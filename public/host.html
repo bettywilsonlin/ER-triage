@@ -397,6 +397,15 @@ function handle(m) {
     case "cq":      phase = "course_q";     setButtons(); renderCourseQ(m); break;
     case "cdist":   phase = "course_dist";  setButtons(); renderDistOnly(m); break;
     case "creveal": phase = "course_reveal";setButtons(); renderCourseReveal(m); renderBoard(m.board); break;
+    case "course_end":
+      // course 版本的 quiz_end：最後一題結束後的最終排行榜（新增，不動上面 classic 的 case quiz_end/sim_end）
+      phase = "course_end"; setButtons(); show("v-final");
+      $("final-title").textContent = "課程排行榜";
+      $("final-table").innerHTML = `<tr><th>#</th><th>暱稱</th><th>分數</th></tr>` +
+        m.board.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.name)}</td><td>${r.score}</td></tr>`).join("");
+      $("debrief").textContent = "";
+      renderBoard(m.board);
+      break;
     case "sync":
       phase = m.phase; setButtons(); renderBoard(m.board);
       if (m.phase === "quiz" && m.q) renderQuestion(m.q, false);

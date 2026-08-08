@@ -305,6 +305,14 @@ function handle(m) {
       $("you-src").textContent = "依據：" + m.src;
       break;
     }
+    // course_end：課程版本的 quiz_end，最後一題結束後的個人端結束卡（新增，不動上面 classic 的 case quiz_end/sim_end）
+    case "course_end": {
+      show("v-final");
+      $("final-title").textContent = "課程結束";
+      const rows = m.board.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.name)}</td><td>${r.score}</td></tr>`).join("");
+      $("final-table").innerHTML = `<tr><th>#</th><th>暱稱</th><th>分數</th></tr>${rows}`;
+      break;
+    }
     case "reset": location.reload(); break;
   }
 }
