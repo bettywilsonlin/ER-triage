@@ -3,6 +3,9 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
+    paths-ignore:
+      - 'course/**'
+      - '**/*.md'
 jobs:
   deploy:
     runs-on: ubuntu-latest

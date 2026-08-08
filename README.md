@@ -1,9 +1,20 @@
-# TTAS 檢傷遊戲
+# TTAS 檢傷遊戲（monorepo）
 
 台灣急診五級檢傷（TTAS）課堂互動遊戲。講師電腦投影主畫面，學員手機掃 QR code 作答。
 Round 1 快問快答（12 題）+ Round 2「檢傷站的一小時」模擬（10 位病人，含惡化事件與急救床機制）。
 
 技術：Cloudflare Workers + Durable Objects（WebSocket 即時同步），免費方案即可，零成本。
+
+## 這個 repo 裡有什麼
+
+本 repo 是遊戲程式與課程教案的 monorepo，分兩層：
+
+| 路徑 | 內容 | 狀態 |
+|---|---|---|
+| `src/` + `public/` | 會實際部署上線的 web app（Worker、Durable Object、學員/講師頁面）——**classic 模式**，也就是本文件其餘章節說的遊戲 | 已上線、以下章節說明如何部署與使用 |
+| `course/` | PGY1 急診入門課程的設計文件、講師手冊、v2 內容檔與紙本降級教具——**course 模式**的教案設計 | 目前僅有設計文件，尚未整合進 `src/`；上課操作腳本見 [`course/docs/TEACHING_GUIDE_v2.md`](course/docs/TEACHING_GUIDE_v2.md) |
+
+`course/**` 與所有 `*.md` 的變更不會觸發 Cloudflare 部署（見 `.github/workflows/deploy.yml`），只有 `src/`、`public/`、`wrangler.jsonc` 等程式改動才會部署。
 
 ## 部署（一次性設定）
 
@@ -45,11 +56,12 @@ Round 1 快問快答（12 題）+ Round 2「檢傷站的一小時」模擬（10 
 ## 專案結構
 
 ```
-src/index.js      Worker + GameRoom Durable Object（遊戲伺服器）
-src/questions.js  題庫與參數
-public/index.html 學員手機端
-public/host.html  講師投影端
-wrangler.jsonc    Cloudflare 設定
+src/index.js       Worker + GameRoom Durable Object（遊戲伺服器）
+src/questions.js   題庫與參數
+public/index.html  學員手機端
+public/host.html   講師投影端
+wrangler.jsonc     Cloudflare 設定
+course/            PGY1 課程設計、講師手冊、v2 內容檔、紙本教具（見 course/README.md）
 ```
 
 ## 已通過的整合測試
