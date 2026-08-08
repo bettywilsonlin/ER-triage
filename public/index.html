@@ -286,6 +286,25 @@ function handle(m) {
       else if (myName) show("v-wait");
       break;
     }
+    // ---------- Course 模式三段式（Task 2.3 新增，classic case 不動）----------
+    // cq：直接重用既有 renderQuestion 畫題目與作答鈕（course_q 允許作答，伺服器已放行 {t:"ans",v}）。
+    case "cq": renderQuestion(m, false); break;
+    // cdist：分佈階段學員看不到正解（伺服器 cdist payload 本就不含 ans/explain/src），
+    // 這裡只做視覺鎖定——切到等待卡＋鎖答案鈕；伺服器端 course_dist 已拒收 ans，鎖定純屬保險。
+    case "cdist": {
+      show("v-wait");
+      $("wait-sub").textContent = "已送出，看看大家怎麼分 → 等講師揭曉";
+      lockAnswers();
+      break;
+    }
+    // creveal：個人對錯/加分/總分已由伺服器 courseReveal() 以既有 "you" 訊息單獨送達（不重複處理），
+    // 這裡只補上解說與依據，貼在 you 訊息已顯示的 v-you 卡上（對映既有 reveal/pt_reveal case 的做法）。
+    case "creveal": {
+      show("v-you");
+      $("you-explain").textContent = m.explain;
+      $("you-src").textContent = "依據：" + m.src;
+      break;
+    }
     case "reset": location.reload(); break;
   }
 }
