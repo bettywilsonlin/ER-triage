@@ -5,6 +5,13 @@ Round 1 快問快答（12 題）+ Round 2「檢傷站的一小時」模擬（10 
 
 技術：Cloudflare Workers + Durable Objects（WebSocket 即時同步），免費方案即可，零成本。
 
+## 🎮 線上使用
+
+- **講師端**：<https://ttas-triage-game.bettywilsonlin.workers.dev/host>
+- **學員端**：掃講師畫面上的 QR code，或開 <https://ttas-triage-game.bettywilsonlin.workers.dev/>
+
+手機用任何網路（4G/5G 或 Wi-Fi）都能連，不需與講師電腦同一網路。
+
 ## 這個 repo 裡有什麼
 
 本 repo 是遊戲程式與課程教案的 monorepo，分兩層：
