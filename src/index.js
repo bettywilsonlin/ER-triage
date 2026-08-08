@@ -14,7 +14,10 @@ export default {
 };
 
 const PHASES = { LOBBY: "lobby", QUIZ: "quiz", QUIZ_REVEAL: "quiz_reveal", QUIZ_END: "quiz_end",
-                 SIM: "sim", SIM_REVEAL: "sim_reveal", SIM_WAIT: "sim_wait", SIM_END: "sim_end" };
+                 SIM: "sim", SIM_REVEAL: "sim_reveal", SIM_WAIT: "sim_wait", SIM_END: "sim_end",
+                 // ---- course 模式（Task 2.1 新增，classic 不引用）----
+                 // 三段式：COURSE_Q（作答）→ COURSE_DIST（只看分佈，不揭答案，Kolb 停頓）→ COURSE_REVEAL（揭答案+計分）
+                 COURSE_Q: "course_q", COURSE_DIST: "course_dist", COURSE_REVEAL: "course_reveal", COURSE_END: "course_end" };
 
 export class GameRoom {
   constructor(ctx, env) {
@@ -36,6 +39,7 @@ export class GameRoom {
       players: {},            // name -> player 狀態
       pendingDet: [],         // [{ dueArrival, ptIndex, victims: [names] }]
       lastReveal: null,       // 重連時重繪用
+      ci: -1,                 // 目前 course 題號（course 模式專用，classic 不讀取）
     };
   }
 
@@ -104,6 +108,13 @@ export class GameRoom {
         await this.save();
         this.broadcast({ t: "reset" });
         break;
+      // ---- course 模式（Task 2.1 新增）----
+      // 三顆講師按鈕天然分離：show_dist / reveal / course_next 各自獨立鍵，
+      // 不可用一顆連跳（reveal 是新 key，與 classic 的 next 不同鍵）。
+      case "course_start": if (this.s.phase === PHASES.LOBBY) await this.startCourse(); break;
+      case "show_dist":    if (this.s.phase === PHASES.COURSE_Q) await this.courseShowDist(); break;
+      case "reveal":       if (this.s.phase === PHASES.COURSE_DIST) await this.courseReveal(); break;
+      case "course_next":  if (this.s.phase === PHASES.COURSE_REVEAL) await this.courseNextQ(); break;
     }
   }
 
@@ -133,7 +144,8 @@ export class GameRoom {
   async onAnswer(name, v) {
     const inQuiz = this.s.phase === PHASES.QUIZ;
     const inSim = this.s.phase === PHASES.SIM;
-    if (!inQuiz && !inSim) return;
+    const inCourseQ = this.s.phase === PHASES.COURSE_Q; // course 模式（Task 2.1）：最小 OR 擴充，不動 classic 兩條件
+    if (!inQuiz && !inSim && !inCourseQ) return;
     if (Date.now() > this.s.deadline) return;
     v = Number(v);
     if (!Number.isInteger(v)) return;
@@ -188,6 +200,97 @@ export class GameRoom {
     this.s.lastReveal = { t: "quiz_end", board: this.board() };
     await this.save();
     this.broadcast(this.s.lastReveal);
+  }
+
+  // ---------- Course 模式：三段式 phase 機（Task 2.1 新增，classic 不引用）----------
+  // 三段式先套用在 Part 1 題庫（QUIZ）內容上，用 this.s.ci 當題目索引（類比 classic 的 qi）。
+  // 講師手動推進三段（course_start → show_dist → reveal → course_next），
+  // 不掛會自動揭曉的 alarm，避免三段被合成一鍵（違反三顆按鈕分離的硬規則）。
+  courseQPayload() {
+    const q = QUIZ[this.s.ci];
+    return { t: "cq", i: this.s.ci, total: QUIZ.length, kind: q.kind, text: q.text,
+             options: q.kind === "choice" ? q.options : null,
+             secs: this.quizSecs(q), endsAt: this.s.deadline, now: Date.now() };
+  }
+
+  async startCourse() {
+    this.s.phase = PHASES.COURSE_Q;
+    this.s.ci = 0;
+    this.s.answers = {};
+    const q = QUIZ[this.s.ci];
+    this.s.deadline = Date.now() + this.quizSecs(q) * 1000;
+    await this.save();
+    this.broadcast(this.courseQPayload());
+  }
+
+  async courseShowDist() {
+    if (this.s.phase !== PHASES.COURSE_Q) return;
+    const q = QUIZ[this.s.ci];
+    this.s.phase = PHASES.COURSE_DIST;
+    const nOpts = q.kind === "choice" ? q.options.length : 5;
+    const dist = new Array(nOpts).fill(0);
+    for (const [name, a] of Object.entries(this.s.answers)) {
+      const idx = q.kind === "choice" ? a.v : a.v - 1;
+      if (idx >= 0 && idx < nOpts) dist[idx]++;
+    }
+    // Kolb 停頓：只給分佈、不計分、不揭答案（嚴禁含 ans/explain/src）
+    const payload = { t: "cdist", i: this.s.ci, kind: q.kind, dist };
+    await this.save();
+    this.broadcast(payload);
+    return payload;
+  }
+
+  async courseReveal() {
+    if (this.s.phase !== PHASES.COURSE_DIST) return;
+    const q = QUIZ[this.s.ci];
+    this.s.phase = PHASES.COURSE_REVEAL;
+    const total = this.quizSecs(q) * 1000;
+
+    for (const [name, a] of Object.entries(this.s.answers)) {
+      const p = this.s.players[name];
+      if (!p) continue;
+      const correct = a.v === q.ans;
+      if (correct) {
+        const speed = Math.max(0, Math.round(SCORING.quizSpeedMax * (this.s.deadline - a.at) / total));
+        const delta = SCORING.quizBase + speed;
+        p.score += delta;
+        p.stats.qCorrect++;
+        this.tellPlayer(name, { t: "you", correct: true, delta, score: p.score });
+      } else {
+        this.tellPlayer(name, { t: "you", correct: false, delta: 0, score: p.score });
+      }
+    }
+    for (const name of Object.keys(this.s.players)) {
+      if (this.s.answers[name] === undefined) {
+        this.tellPlayer(name, { t: "you", correct: false, delta: 0, score: this.s.players[name].score, missed: true });
+      }
+    }
+    const payload = { t: "creveal", i: this.s.ci, ans: q.ans,
+                      options: q.kind === "choice" ? q.options : null,
+                      explain: q.explain, src: q.src, board: this.board() };
+    this.s.lastReveal = payload;
+    await this.save();
+    this.broadcast(payload);
+    return payload;
+  }
+
+  async courseNextQ() {
+    if (this.s.phase !== PHASES.COURSE_REVEAL) return;
+    this.s.ci++;
+    if (this.s.ci >= QUIZ.length) {
+      this.s.phase = PHASES.COURSE_END;
+      this.s.lastReveal = { t: "course_end", board: this.board() };
+      await this.save();
+      this.broadcast(this.s.lastReveal);
+      return;
+    }
+    this.s.phase = PHASES.COURSE_Q;
+    this.s.answers = {};
+    const q = QUIZ[this.s.ci];
+    this.s.deadline = Date.now() + this.quizSecs(q) * 1000;
+    this.s.lastReveal = null;
+    await this.save();
+    this.broadcast(this.courseQPayload());
   }
 
   // ---------- 模擬（檢傷站的一小時） ----------
