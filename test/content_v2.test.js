@@ -11,3 +11,8 @@ it("part1 以 part1_ref 標記，不重複收錄題庫", () => {
   expect(CONTENT_V2.part1_ref?.repo).toBeDefined();
   expect(CONTENT_V2.part1).toBeUndefined(); // Part 1 不在此檔
 });
+it("缺少 locale 時驗證應失敗", () => {
+  const r = validateContentV2({ ...CONTENT_V2, locale: undefined });
+  expect(r.errors).toContain("locale");
+  expect(r.ok).toBe(false);
+});
