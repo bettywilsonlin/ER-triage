@@ -232,6 +232,13 @@ function handle(m) {
       break;
     case "q": renderQuestion(m, false); break;
     case "pt": renderQuestion(m, true); break;
+    // qdist：Round 1 停頓階段——鎖答案、切等待卡，讓學員抬頭看投影的分佈、等講師揭曉（對映 course 的 cdist）。
+    case "qdist": {
+      show("v-wait");
+      $("wait-sub").textContent = "已送出，看看大家怎麼分 → 等講師揭曉";
+      lockAnswers();
+      break;
+    }
     case "sim_intro":
       show("v-wait");
       $("wait-title").textContent = "Round 2：檢傷站的一小時";

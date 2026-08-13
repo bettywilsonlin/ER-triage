@@ -13,7 +13,7 @@ export default {
   },
 };
 
-const PHASES = { LOBBY: "lobby", QUIZ: "quiz", QUIZ_REVEAL: "quiz_reveal", QUIZ_END: "quiz_end",
+const PHASES = { LOBBY: "lobby", QUIZ: "quiz", QUIZ_DIST: "quiz_dist", QUIZ_REVEAL: "quiz_reveal", QUIZ_END: "quiz_end",
                  SIM: "sim", SIM_REVEAL: "sim_reveal", SIM_WAIT: "sim_wait", SIM_END: "sim_end",
                  // ---- course 模式（Task 2.1 新增，classic 不引用）----
                  // 三段式：COURSE_Q（作答）→ COURSE_DIST（只看分佈，不揭答案，Kolb 停頓）→ COURSE_REVEAL（揭答案+計分）
@@ -96,7 +96,9 @@ export class GameRoom {
       case "hello": this.sendSync(ws, null); this.broadcastLobby(); break;
       case "quiz_start": if (this.s.phase === PHASES.LOBBY) await this.nextQuiz(); break;
       case "next":
-        if (this.s.phase === PHASES.QUIZ) await this.revealQuiz();          // 提前揭曉
+        // Round 1 三段式（同一顆按鈕依相位推進）：作答 →[顯示分佈]→ 看分佈 →[揭曉]→ 揭曉+計分 →[下一題]
+        if (this.s.phase === PHASES.QUIZ) await this.quizShowDist();         // 提前結束作答，只顯示分佈（不揭答案）
+        else if (this.s.phase === PHASES.QUIZ_DIST) await this.revealQuiz(); // 揭曉答案+計分
         else if (this.s.phase === PHASES.QUIZ_REVEAL) await this.nextQuiz();
         else if (this.s.phase === PHASES.SIM) await this.revealPatient();   // 模擬：提前揭曉本病人
         else if (this.s.phase === PHASES.SIM_WAIT) await this.arrivePatient(); // 模擬：跳過等待，下一位立即抵達
@@ -157,11 +159,31 @@ export class GameRoom {
     // 由計時器（時間到）或講師按「提前揭曉」來揭曉。
   }
 
-  async revealQuiz() {
+  // Round 1 停頓階段：作答結束後先只給分佈（答案／解析／依據都蓋著），讓學員先看「大家怎麼分」。
+  // 對照 courseShowDist：同一種 Kolb 停頓，但 classic 這裡是接在有計時器的作答窗之後。
+  async quizShowDist() {
     if (this.s.phase !== PHASES.QUIZ) return;
     const q = QUIZ[this.s.qi];
+    this.s.phase = PHASES.QUIZ_DIST;
+    await this.ctx.storage.deleteAlarm();   // 停掉作答計時器；接下來由講師手動揭曉
+    const nOpts = q.kind === "choice" ? q.options.length : 5;
+    const dist = new Array(nOpts).fill(0);
+    for (const [name, a] of Object.entries(this.s.answers)) {
+      const idx = q.kind === "choice" ? a.v : a.v - 1;
+      if (idx >= 0 && idx < nOpts) dist[idx]++;
+    }
+    // 嚴禁含 ans/explain/src——這階段畫面不可有任何正解線索。options 只是選項標籤（非答案），給 host 畫 choice 長條用。
+    const payload = { t: "qdist", i: this.s.qi, kind: q.kind,
+                      options: q.kind === "choice" ? q.options : null, dist };
+    await this.save();
+    this.broadcast(payload);
+    return payload;
+  }
+
+  async revealQuiz() {
+    if (this.s.phase !== PHASES.QUIZ_DIST) return;   // 揭曉只能從「看分佈」推進（三段式：作答→分佈→揭曉）
+    const q = QUIZ[this.s.qi];
     this.s.phase = PHASES.QUIZ_REVEAL;
-    await this.ctx.storage.deleteAlarm();
     const nOpts = q.kind === "choice" ? q.options.length : 5;
     const dist = new Array(nOpts).fill(0);
     const total = this.quizSecs(q) * 1000;
@@ -447,7 +469,7 @@ export class GameRoom {
 
   // ---------- Alarm：計時引擎 ----------
   async alarm() {
-    if (this.s.phase === PHASES.QUIZ) return this.revealQuiz();
+    if (this.s.phase === PHASES.QUIZ) return this.quizShowDist();   // 作答時間到 → 先顯示分佈（不自動揭答案）
     if (this.s.phase === PHASES.SIM) return this.revealPatient();
     if (this.s.phase === PHASES.SIM_WAIT) return this.arrivePatient();
   }

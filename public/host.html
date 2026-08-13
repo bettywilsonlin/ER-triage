@@ -133,14 +133,6 @@
   <button id="b-reset">重設本場</button>
 </footer>
 
-<!-- course 專用控制列（與 classic 控制列並存，不共用按鈕），依 phase 各自啟用 -->
-<footer id="course-footer">
-  <button id="b-course" class="go">開始課程（course）</button>
-  <button id="b-showdist" disabled>顯示分佈</button>
-  <button id="b-reveal" disabled>揭曉答案</button>
-  <button id="b-cnext" disabled>下一題</button>
-</footer>
-
 <script>
 const $ = id => document.getElementById(id);
 let room = (new URL(location.href)).searchParams.get("room");
@@ -172,12 +164,8 @@ $("b-quiz").onclick = () => ws.send(JSON.stringify({ t: "quiz_start" }));
 $("b-next").onclick = () => ws.send(JSON.stringify({ t: "next" }));
 $("b-sim").onclick  = () => ws.send(JSON.stringify({ t: "sim_start" }));
 $("b-reset").onclick = () => { if (confirm("確定重設？所有分數將清空。")) ws.send(JSON.stringify({ t: "reset" })); };
-
-// course 三段式按鈕（各自獨立送出訊息，絕不合併連跳）
-$("b-course").onclick   = () => ws.send(JSON.stringify({ t: "course_start" }));
-$("b-showdist").onclick = () => ws.send(JSON.stringify({ t: "show_dist" }));
-$("b-reveal").onclick   = () => ws.send(JSON.stringify({ t: "reveal" }));
-$("b-cnext").onclick    = () => ws.send(JSON.stringify({ t: "course_next" }));
+// 註：course 三段式已併進 Round 1 的 b-next（作答→顯示分佈→揭曉→下一題），下排 course 控制列已移除。
+// 伺服器端 course_start/show_dist/course_next 邏輯保留（Phase 3-4 Part 2 的地基），目前無按鈕觸發。
 
 function show(id) {
   for (const v of ["v-lobby", "v-q", "v-final"]) $(v).classList.add("hidden");
@@ -185,21 +173,18 @@ function show(id) {
 }
 function setButtons() {
   $("b-quiz").disabled = phase !== "lobby";
-  $("b-next").disabled = !["quiz","quiz_reveal","sim","sim_reveal","sim_wait"].includes(phase);
+  // Round 1 三段式：同一顆 b-next 依相位換字（作答→顯示分佈→揭曉答案→下一題）；Round 2 維持原本兩段。
+  $("b-next").disabled = !["quiz","quiz_dist","quiz_reveal","sim","sim_reveal","sim_wait"].includes(phase);
   $("b-next").textContent =
-    phase === "quiz" ? "提前揭曉" :
+    phase === "quiz" ? "顯示分佈" :
+    phase === "quiz_dist" ? "揭曉答案" :
     phase === "quiz_reveal" ? "下一題" :
     phase === "sim" ? "提前揭曉" :
     (phase === "sim_reveal" || phase === "sim_wait") ? "下一位病人 ▶" : "揭曉 / 下一題";
   $("b-sim").disabled = !(phase === "quiz_end" || phase === "lobby");
-  $("phase-label").textContent = ({ lobby: "大廳", quiz: "Round 1 作答中", quiz_reveal: "Round 1 揭曉",
-    quiz_end: "Round 1 結束", sim: "Round 2 作答中", sim_reveal: "Round 2 揭曉",
+  $("phase-label").textContent = ({ lobby: "大廳", quiz: "Round 1 作答中", quiz_dist: "Round 1 看分佈",
+    quiz_reveal: "Round 1 揭曉", quiz_end: "Round 1 結束", sim: "Round 2 作答中", sim_reveal: "Round 2 揭曉",
     sim_wait: "Round 2 病人抵達中", sim_end: "Round 2 結束" })[phase] || "";
-  // course 分支（新增，不動上面 classic 既有行）：三顆揭曉按鈕依 phase 各自獨立亮起，不可連跳
-  $("b-course").disabled   = phase !== "lobby";
-  $("b-showdist").disabled = phase !== "course_q";
-  $("b-reveal").disabled   = phase !== "course_dist";
-  $("b-cnext").disabled    = phase !== "course_reveal";
 }
 function startTimer(endsAt, now) {
   offset = Date.now() - now;
@@ -269,6 +254,33 @@ function renderReveal(m) {
   $("explain").textContent = m.explain;
   $("src").textContent = "依據：" + m.src;
   renderBoard(m.board);
+}
+// Round 1 停頓階段渲染：畫同一組長條，但刻意藏答案（不標 ✓、不畫正解線、正解/解析/依據全空）。
+// 讀 m.options（choice 標籤）與 m.dist；level-kind 用固定 5 級標籤。
+function renderQuizDist(m) {
+  show("v-q");
+  clearInterval(timerH); $("timer").textContent = "";
+  $("reveal-box").classList.remove("hidden");
+  $("progress").textContent = "";
+  const box = $("dist"); box.innerHTML = "";
+  const rows = [];
+  if (m.kind === "choice") {
+    (m.options || []).forEach((o, i) => rows.push({ lab: o, n: m.dist[i], cls: "c3" }));
+  } else {
+    for (let l = 1; l <= 5; l++) rows.push({ lab: LV[l], n: m.dist[l - 1], cls: "c" + l });
+  }
+  const max = Math.max(1, ...rows.map(r => r.n));
+  for (const r of rows) {
+    const row = document.createElement("div"); row.className = "row";
+    // 不加 ✓、不加 correct-tag：停頓畫面看不到任何正解線索
+    row.innerHTML = `<div class="lab">${esc(r.lab)}</div>
+      <div class="barwrap"><div class="bar ${r.cls}" style="width:0%">${r.n || ""}</div></div>`;
+    box.appendChild(row);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      row.querySelector(".bar").style.width = (100 * r.n / max) + "%";
+    }));
+  }
+  $("ansline").textContent = ""; $("explain").textContent = ""; $("src").textContent = "";
 }
 // ---- course 三段式渲染（新增，不動上面 classic 的 renderQuestion/renderReveal） ----
 function renderCourseQ(m) {
@@ -345,6 +357,7 @@ function handle(m) {
       $("lobby-names").innerHTML = m.joined.map(n => `<span>${esc(n)}</span>`).join("");
       break;
     case "q":  phase = "quiz"; setButtons(); renderQuestion(m, false); break;
+    case "qdist": phase = "quiz_dist"; setButtons(); renderQuizDist(m); break;
     case "pt": phase = "sim";  setButtons(); renderQuestion(m, true); if (m.board) renderBoard(m.board); break;
     case "progress": $("progress").textContent = `已作答 ${m.answered}/${m.players} 人`; break;
     case "reveal":    phase = "quiz_reveal"; setButtons(); renderReveal(m); break;

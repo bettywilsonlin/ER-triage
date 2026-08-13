@@ -13,7 +13,7 @@ function room(name) {
   return env.ROOMS.get(id);
 }
 
-it("classic quiz：答對計分 = base(100) + 速度加成(>100)，且 phase 依序 LOBBY→QUIZ→QUIZ_REVEAL", async () => {
+it("classic quiz：答對計分 = base(100) + 速度加成(>100)，且 phase 依序 LOBBY→QUIZ→QUIZ_DIST→QUIZ_REVEAL", async () => {
   const stub = room("quiz1");
   await runInDurableObject(stub, async (instance) => {
     expect(instance.s.phase).toBe("lobby");
@@ -25,7 +25,11 @@ it("classic quiz：答對計分 = base(100) + 速度加成(>100)，且 phase 依
     const q = QUIZ[0];
     // 快答：deadline 前 1 秒送出，應拿到 >0 的速度加成
     instance.s.answers["小明"] = { v: q.ans, at: instance.s.deadline - 1000 };
-    await instance.revealQuiz(); // QUIZ → QUIZ_REVEAL
+    await instance.quizShowDist(); // QUIZ → QUIZ_DIST（Kolb 停頓：先看分佈、還沒計分）
+    expect(instance.s.phase).toBe("quiz_dist");
+    expect(instance.s.players["小明"].score).toBe(0); // 停頓階段不計分
+
+    await instance.revealQuiz(); // QUIZ_DIST → QUIZ_REVEAL
     expect(instance.s.phase).toBe("quiz_reveal");
 
     const score = instance.s.players["小明"].score;
