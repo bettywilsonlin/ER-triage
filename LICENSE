@@ -1,0 +1,46 @@
+本專案採雙授權（dual license）。
+This project is dual-licensed.
+
+  * 程式碼 —— MIT License（本檔全文如下）
+    Source code — MIT License (full text below)
+    範圍：src/ 的程式邏輯、public/、test/、
+          設定檔（package.json、wrangler.jsonc、vitest.config.js）
+
+  * 課程教材與題目內容 —— CC BY-NC-SA 4.0（見 LICENSE-CONTENT）
+    Course material and question content — CC BY-NC-SA 4.0 (see LICENSE-CONTENT)
+    範圍：course/ 全部、README.md、CLAUDE.md、TODO.md，
+          以及 src/questions.js 與 src/content_v2.js 內所載的
+          題目文字、案例敘述、選項、解說與計分規則
+
+  兩者界線以「拿掉之後還跑不跑得動」判斷：拿掉不影響程式運行的，是內容。
+  A file is "content" if removing it does not stop the software from running.
+
+  ⚠️ src/questions.js 與 src/content_v2.js 是混合檔：**程式結構走 MIT，
+  其中承載的題目與教材文字走 CC BY-NC-SA 4.0。**
+
+  第三方來源：本專案的檢傷題目係依「急診五級檢傷分類基準」撰寫之教學題目，
+  該基準表本身之權利屬其原權利人，不在本授權範圍內。詳見 LICENSE-CONTENT。
+
+---
+
+MIT License
+
+Copyright (c) 2026 YU-HUI LIN
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

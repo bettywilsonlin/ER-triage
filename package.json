@@ -2,6 +2,7 @@
   "name": "ttas-triage-game",
   "private": true,
   "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",

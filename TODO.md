@@ -41,7 +41,6 @@
 
 - [ ] **合併 main ＝ 觸發 Cloudflare 正式部署**（要合併時我先給 diff 摘要）
 - [ ] **舊 `ER_PGY_orientation` repo 要不要 archive**
-- [ ] **`course/` 教材要用什麼 LICENSE**
 
 ## ⚠️ 冷讀者必知（動工前一定要看）
 
@@ -58,6 +57,17 @@
 - `public/host.html:168` 註明「伺服器端 course 邏輯保留，目前無按鈕觸發」——2026-08-14 UI 精簡的遺留。
 
 ## ✅ 已完成
+- [x] 2026-09-11 **拍板授權：雙授權（程式 MIT ＋ 教材 CC BY-NC-SA 4.0）**，署名 `YU-HUI LIN`
+      （與 `acls-megacode` 同一套）。新增 `LICENSE`、`LICENSE-CONTENT`（含第三方來源與醫療免責），
+      `README.md` 加〈授權〉節，`package.json` 加 `"license"`，
+      `course/README.md` 那句「本 repo 尚未附 LICENSE」已訂正。
+      界線的判斷標準：**拿掉之後還跑不跑得動**——拿掉不影響程式運行的算內容。
+      ⚠️ **這個 repo 是 PUBLIC**，跟 acls-megacode 不同，授權**即刻生效**
+      （此前無 LICENSE ＝ 法律上保留所有權利，別人看得到卻不能合法使用）。
+      ⚠️ `src/questions.js`／`src/content_v2.js` 是混合檔：程式結構 MIT、題目文字 CC，
+      這一條寫在三個地方（LICENSE 註記、LICENSE-CONTENT 範圍表、README 授權節），改動時三處要一起改。
+      📌 **未解**：TTAS 基準表原文的重用條件我沒有查證，只在授權檔裡聲明「不在本授權範圍內」。
+      要對外大量散布教材前，建議向醫策會／急醫會確認。
 
 - [x] **P0 上線**（2026-08-08）
 - [x] **UI 精簡上線**（2026-08-14）— 三段式併進 classic Round 1 的 `b-next`，course 控制列移除
